@@ -137,8 +137,8 @@ export default class AutoSizer extends PureComponent {
       this.state.width !== newWidth
     ) {
       this.setState({
-        height: height - paddingTop - paddingBottom,
-        width: width - paddingLeft - paddingRight
+        height: newHeight,
+        width: newWidth
       })
 
       onResize({ height, width })
