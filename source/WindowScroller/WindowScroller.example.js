@@ -4,6 +4,7 @@ import Immutable from 'immutable'
 import PropTypes from 'prop-types'
 import React, { PureComponent } from 'react'
 import { ContentBox, ContentBoxHeader, ContentBoxParagraph } from '../demo/ContentBox'
+import { LabeledInput, InputRow } from '../demo/LabeledInput'
 import WindowScroller from './WindowScroller'
 import List from '../List'
 import AutoSizer from '../AutoSizer'
@@ -11,9 +12,9 @@ import styles from './WindowScroller.example.css'
 
 export default class WindowScrollerExample extends PureComponent {
   static contextTypes = {
-    list: PropTypes.instanceOf(Immutable.List).isRequired,
     customElement: PropTypes.any,
     isScrollingCustomElement: PropTypes.bool.isRequired,
+    list: PropTypes.instanceOf(Immutable.List).isRequired,
     setScrollingCustomElement: PropTypes.func
   }
 
@@ -21,18 +22,20 @@ export default class WindowScrollerExample extends PureComponent {
     super(props)
 
     this.state = {
+      scrollToIndex: undefined,
       showHeaderText: true
     }
 
     this._hideHeader = this._hideHeader.bind(this)
-    this._rowRenderer = this._rowRenderer.bind(this)
     this._onCheckboxChange = this._onCheckboxChange.bind(this)
+    this._onScrollToRowChange = this._onScrollToRowChange.bind(this)
+    this._rowRenderer = this._rowRenderer.bind(this)
     this._setRef = this._setRef.bind(this)
   }
 
   render () {
-    const { list, isScrollingCustomElement, customElement } = this.context
-    const { showHeaderText } = this.state
+    const { customElement, isScrollingCustomElement, list } = this.context
+    const { scrollToIndex, showHeaderText } = this.state
 
     return (
       <ContentBox>
@@ -69,24 +72,35 @@ export default class WindowScrollerExample extends PureComponent {
             Use custom element for scrolling
           </label>
         </ContentBoxParagraph>
-
+        <InputRow>
+          <LabeledInput
+            label='Scroll to'
+            name='onScrollToRow'
+            placeholder='Index...'
+            onChange={this._onScrollToRowChange}
+            value={scrollToIndex || ''}
+          />
+        </InputRow>
         <div className={styles.WindowScrollerWrapper}>
           <WindowScroller
             ref={this._setRef}
             scrollElement={isScrollingCustomElement ? customElement : null}
           >
-            {({ height, isScrolling, scrollTop }) => (
+            {({ height, isScrolling, onChildScroll, scrollTop }) => (
               <AutoSizer disableHeight>
                 {({ width }) => (
                   <List
+                    ref={(el) => { window.listEl = el }}
                     autoHeight
                     className={styles.List}
                     height={height}
                     isScrolling={isScrolling}
+                    onScroll={onChildScroll}
                     overscanRowCount={2}
                     rowCount={list.size}
                     rowHeight={30}
                     rowRenderer={this._rowRenderer}
+                    scrollToIndex={scrollToIndex}
                     scrollTop={scrollTop}
                     width={width}
                   />
@@ -134,5 +148,18 @@ export default class WindowScrollerExample extends PureComponent {
 
   _onCheckboxChange (event) {
     this.context.setScrollingCustomElement(event.target.checked)
+  }
+
+  _onScrollToRowChange (event) {
+    const { list } = this.context
+    let scrollToIndex = Math.min(list.size - 1, parseInt(event.target.value, 10))
+
+    if (isNaN(scrollToIndex)) {
+      scrollToIndex = undefined
+    }
+
+    setTimeout(() => {
+      this.setState({ scrollToIndex })
+    }, 0)
   }
 }

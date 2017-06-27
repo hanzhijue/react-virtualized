@@ -45,6 +45,11 @@ A windowed grid of elements. `Grid` only renders cells necessary to fill itself 
 
 Gets offsets for a given cell and alignment.
 
+##### handleScrollEvent ({ scrollLeft, scrollTop })
+
+This method handles a scroll event originating from an external scroll control.
+It's an advanced method and should probably not be used unless you're implementing a custom scroll-bar solution.
+
 ##### measureAllCells
 
 Pre-measure all columns and rows in a `Grid`.
@@ -162,7 +167,7 @@ function cellRangeRenderer ({
 
 ### overscanIndicesGetter
 This is an advanced property.
-This function is responsible for calculating the number of cells to overscan before and after a specified range. By default, React Virtualized optimizes the number of cells to overscan based on scroll direction. If you'd like to customize this behavior, you may want to fork the [`defaultOverscanIndicesGetter`](https://github.com/bvaughn/react-virtualized/blob/master/source/Grid/utils/defaultOverscanIndicesGetter.js) function.
+This function is responsible for calculating the number of cells to overscan before and after a specified range. By default, React Virtualized optimizes the number of cells to overscan based on scroll direction. If you'd like to customize this behavior, you may want to fork the [`defaultOverscanIndicesGetter`](https://github.com/bvaughn/react-virtualized/blob/master/source/Grid/defaultOverscanIndicesGetter.js) function.
 
 ```
 function overscanIndicesGetter ({

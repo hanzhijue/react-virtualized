@@ -213,9 +213,54 @@ describe('CellMeasurer', () => {
   })
 
   // See issue #593
-  it('should explicitly set widht/height style to "auto" before re-measuring', () => {
+  it('should explicitly set width/height style to "auto" before re-measuring', () => {
     const cache = new CellMeasurerCache({
       fixedWidth: true
+    })
+    const parent = createParent({ cache })
+    const child = jest.fn()
+    child.mockImplementation(
+      (params) => <div style={{ width: 100, height: 30 }}></div>
+    )
+
+    let measurer
+    const node = findDOMNode(render(
+      <CellMeasurer
+        ref={(ref) => { measurer = ref }}
+        cache={cache}
+        columnIndex={0}
+        parent={parent}
+        rowIndex={0}
+        style={{}}
+      >
+        {child}
+      </CellMeasurer>
+    ))
+
+    const styleHeights = [30]
+    const styleWidths = [100]
+    Object.defineProperties(node.style, {
+      height: {
+        get: () => styleHeights[styleHeights.length - 1],
+        set: value => styleHeights.push(value)
+      },
+      width: {
+        get: () => styleWidths[styleWidths.length - 1],
+        set: value => styleWidths.push(value)
+      }
+    })
+
+    const { height, width } = measurer._getCellMeasurements(node)
+    expect(height).toBeGreaterThan(0)
+    expect(width).toBeGreaterThan(0)
+    expect(styleHeights).toEqual([30, 'auto', 30])
+    expect(styleWidths).toEqual([100, 100])
+  })
+
+  // See issue #660
+  it('should reset width/height style values after measuring with style "auto"', () => {
+    const cache = new CellMeasurerCache({
+      fixedHeight: true
     })
     const parent = createParent({ cache })
     const child = jest.fn()
@@ -235,12 +280,12 @@ describe('CellMeasurer', () => {
       </CellMeasurer>
     ))
 
-    node.style.width = 100
-    node.style.height = 30
+    node.style.width = 200
+    node.style.height = 60
 
     child.mock.calls[0][0].measure()
 
-    expect(node.style.height).toBe('auto')
-    expect(node.style.width).not.toBe('auto')
+    expect(node.style.height).toBe('30px')
+    expect(node.style.width).toBe('100px')
   })
 })

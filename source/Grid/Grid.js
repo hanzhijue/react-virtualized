@@ -323,6 +323,77 @@ export default class Grid extends PureComponent {
   }
 
   /**
+   * This method handles a scroll event originating from an external scroll control.
+   * It's an advanced method and should probably not be used unless you're implementing a custom scroll-bar solution.
+   */
+  handleScrollEvent ({
+    scrollLeft: scrollLeftParam = 0,
+    scrollTop: scrollTopParam = 0
+  }) {
+    // On iOS, we can arrive at negative offsets by swiping past the start.
+    // To prevent flicker here, we make playing in the negative offset zone cause nothing to happen.
+    if (scrollTopParam < 0) {
+      return
+    }
+
+    // Prevent pointer events from interrupting a smooth scroll
+    this._debounceScrollEnded()
+
+    const { autoHeight, autoWidth, height, width } = this.props
+
+    // When this component is shrunk drastically, React dispatches a series of back-to-back scroll events,
+    // Gradually converging on a scrollTop that is within the bounds of the new, smaller height.
+    // This causes a series of rapid renders that is slow for long lists.
+    // We can avoid that by doing some simple bounds checking to ensure that scroll offsets never exceed their bounds.
+    const scrollbarSize = this._scrollbarSize
+    const totalRowsHeight = this._rowSizeAndPositionManager.getTotalSize()
+    const totalColumnsWidth = this._columnSizeAndPositionManager.getTotalSize()
+    const scrollLeft = Math.min(Math.max(0, totalColumnsWidth - width + scrollbarSize), scrollLeftParam)
+    const scrollTop = Math.min(Math.max(0, totalRowsHeight - height + scrollbarSize), scrollTopParam)
+
+    // Certain devices (like Apple touchpad) rapid-fire duplicate events.
+    // Don't force a re-render if this is the case.
+    // The mouse may move faster then the animation frame does.
+    // Use requestAnimationFrame to avoid over-updating.
+    if (
+      this.state.scrollLeft !== scrollLeft ||
+      this.state.scrollTop !== scrollTop
+    ) {
+      // Track scrolling direction so we can more efficiently overscan rows to reduce empty space around the edges while scrolling.
+      // Don't change direction for an axis unless scroll offset has changed.
+      const scrollDirectionHorizontal = scrollLeft !== this.state.scrollLeft
+        ? scrollLeft > this.state.scrollLeft
+          ? SCROLL_DIRECTION_FORWARD
+          : SCROLL_DIRECTION_BACKWARD
+        : this.state.scrollDirectionHorizontal
+      const scrollDirectionVertical = scrollTop !== this.state.scrollTop
+        ? scrollTop > this.state.scrollTop
+          ? SCROLL_DIRECTION_FORWARD
+          : SCROLL_DIRECTION_BACKWARD
+        : this.state.scrollDirectionVertical
+
+      const newState = {
+        isScrolling: true,
+        scrollDirectionHorizontal,
+        scrollDirectionVertical,
+        scrollPositionChangeReason: SCROLL_POSITION_CHANGE_REASONS.OBSERVED
+      }
+
+      if (!autoHeight) {
+        newState.scrollTop = scrollTop
+      }
+
+      if (!autoWidth) {
+        newState.scrollLeft = scrollLeft
+      }
+
+      this.setState(newState)
+    }
+
+    this._invokeOnScrollMemoizer({ scrollLeft, scrollTop, totalColumnsWidth, totalRowsHeight })
+  }
+
+  /**
    * Invalidate Grid size and recompute visible cells.
    * This is a deferred wrapper for recomputeGridSize().
    * It sets a flag to be evaluated on cDM/cDU to avoid unnecessary renders.
@@ -419,7 +490,7 @@ export default class Grid extends PureComponent {
   }
 
   componentDidMount () {
-    const { getScrollbarSize, scrollLeft, scrollToColumn, scrollTop, scrollToRow } = this.props
+    const { getScrollbarSize, height, scrollLeft, scrollToColumn, scrollTop, scrollToRow, width } = this.props
 
     // If cell sizes have been invalidated (eg we are using CellMeasurer) then reset cached positions.
     // We must do this at the start of the method as we may calculate and update scroll position below.
@@ -437,8 +508,13 @@ export default class Grid extends PureComponent {
       this._setScrollPosition({ scrollLeft, scrollTop })
     }
 
-    if (scrollToColumn >= 0 || scrollToRow >= 0) {
+    // Don't update scroll offset if the size is 0; we don't render any cells in this case.
+    // Setting a state may cause us to later thing we've updated the offce when we haven't.
+    const sizeIsBiggerThanZero = height > 0 && width > 0
+    if (scrollToColumn >= 0 && sizeIsBiggerThanZero) {
       this._updateScrollLeftForScrollToColumn()
+    }
+    if (scrollToRow >= 0 && sizeIsBiggerThanZero) {
       this._updateScrollTopForScrollToRow()
     }
 
@@ -509,6 +585,14 @@ export default class Grid extends PureComponent {
       }
     }
 
+    // Special case where the previous size was 0:
+    // In this case we don't show any windowed cells at all.
+    // So we should always recalculate offset aftward.
+    const sizeJustIncreasedFromZero = (
+      (prevProps.width === 0 || prevProps.height === 0) &&
+      (height > 0 && width > 0)
+    )
+
     // Update scroll offsets if the current :scrollToColumn or :scrollToRow values requires it
     // @TODO Do we also need this check or can the one in componentWillUpdate() suffice?
     if (this._recomputeScrollLeftFlag) {
@@ -526,6 +610,7 @@ export default class Grid extends PureComponent {
         scrollToAlignment,
         scrollToIndex: scrollToColumn,
         size: width,
+        sizeJustIncreasedFromZero,
         updateScrollIndexCallback: (scrollToColumn) => this._updateScrollLeftForScrollToColumn(this.props)
       })
     }
@@ -545,6 +630,7 @@ export default class Grid extends PureComponent {
         scrollToAlignment,
         scrollToIndex: scrollToRow,
         size: height,
+        sizeJustIncreasedFromZero,
         updateScrollIndexCallback: (scrollToRow) => this._updateScrollTopForScrollToRow(this.props)
       })
     }
@@ -1115,70 +1201,6 @@ export default class Grid extends PureComponent {
       return
     }
 
-    // On iOS, we can arrive at negative offsets by swiping past the start.
-    // To prevent flicker here, we make playing in the negative offset zone cause nothing to happen.
-    if (event.target.scrollTop < 0) {
-      return
-    }
-
-    // Prevent pointer events from interrupting a smooth scroll
-    this._debounceScrollEnded()
-
-    const { autoHeight, autoWidth, height, width } = this.props
-
-    const {
-      scrollLeft: eventScrollLeft,
-      scrollTop: eventScrollTop
-    } = event.target
-
-    // When this component is shrunk drastically, React dispatches a series of back-to-back scroll events,
-    // Gradually converging on a scrollTop that is within the bounds of the new, smaller height.
-    // This causes a series of rapid renders that is slow for long lists.
-    // We can avoid that by doing some simple bounds checking to ensure that scroll offsets never exceed their bounds.
-    const scrollbarSize = this._scrollbarSize
-    const totalRowsHeight = this._rowSizeAndPositionManager.getTotalSize()
-    const totalColumnsWidth = this._columnSizeAndPositionManager.getTotalSize()
-    const scrollLeft = Math.min(Math.max(0, totalColumnsWidth - width + scrollbarSize), eventScrollLeft)
-    const scrollTop = Math.min(Math.max(0, totalRowsHeight - height + scrollbarSize), eventScrollTop)
-
-    // Certain devices (like Apple touchpad) rapid-fire duplicate events.
-    // Don't force a re-render if this is the case.
-    // The mouse may move faster then the animation frame does.
-    // Use requestAnimationFrame to avoid over-updating.
-    if (
-      this.state.scrollLeft !== scrollLeft ||
-      this.state.scrollTop !== scrollTop
-    ) {
-      // Track scrolling direction so we can more efficiently overscan rows to reduce empty space around the edges while scrolling.
-      // Don't change direction for an axis unless scroll offset has changed.
-      const scrollDirectionHorizontal = scrollLeft !== this.state.scrollLeft
-        ? scrollLeft > this.state.scrollLeft
-          ? SCROLL_DIRECTION_FORWARD
-          : SCROLL_DIRECTION_BACKWARD
-        : this.state.scrollDirectionHorizontal
-      const scrollDirectionVertical = scrollTop !== this.state.scrollTop
-        ? scrollTop > this.state.scrollTop
-          ? SCROLL_DIRECTION_FORWARD
-          : SCROLL_DIRECTION_BACKWARD
-        : this.state.scrollDirectionVertical
-
-      const newState = {
-        isScrolling: true,
-        scrollDirectionHorizontal,
-        scrollDirectionVertical,
-        scrollPositionChangeReason: SCROLL_POSITION_CHANGE_REASONS.OBSERVED
-      }
-
-      if (!autoHeight) {
-        newState.scrollTop = scrollTop
-      }
-      if (!autoWidth) {
-        newState.scrollLeft = scrollLeft
-      }
-
-      this.setState(newState)
-    }
-
-    this._invokeOnScrollMemoizer({ scrollLeft, scrollTop, totalColumnsWidth, totalRowsHeight })
+    this.handleScrollEvent(event.target)
   }
 }

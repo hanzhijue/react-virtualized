@@ -46,6 +46,7 @@ export default class WindowScroller extends PureComponent {
     }
 
     this._onResize = this._onResize.bind(this)
+    this._onChildScroll = this._onChildScroll.bind(this)
     this.__handleWindowScrollEvent = this.__handleWindowScrollEvent.bind(this)
     this.__resetIsScrolling = this.__resetIsScrolling.bind(this)
   }
@@ -88,6 +89,8 @@ export default class WindowScroller extends PureComponent {
     registerScrollListener(this, scrollElement)
 
     window.addEventListener('resize', this._onResize, false)
+
+    this._isMounted = true
   }
 
   componentWillReceiveProps (nextProps) {
@@ -104,8 +107,9 @@ export default class WindowScroller extends PureComponent {
 
   componentWillUnmount () {
     unregisterScrollListener(this, this.props.scrollElement || window)
-
     window.removeEventListener('resize', this._onResize, false)
+
+    this._isMounted = false
   }
 
   render () {
@@ -113,12 +117,25 @@ export default class WindowScroller extends PureComponent {
     const { isScrolling, scrollTop, scrollLeft, height, width } = this.state
 
     return children({
-      width,
+      onChildScroll: this._onChildScroll,
       height,
       isScrolling,
       scrollLeft,
-      scrollTop
+      scrollTop,
+      width
     })
+  }
+
+  _onChildScroll ({ scrollTop }) {
+    if (this.state.scrollTop === scrollTop) return
+
+    const scrollElement = this.scrollElement
+
+    if (typeof scrollElement.scrollTo === 'function') {
+      scrollElement.scrollTo(0, scrollTop + this._positionFromTop)
+    } else {
+      scrollElement.scrollTop = scrollTop + this._positionFromTop
+    }
   }
 
   _onResize (event) {
@@ -127,6 +144,8 @@ export default class WindowScroller extends PureComponent {
 
   // Referenced by utils/onScroll
   __handleWindowScrollEvent (event) {
+    if (!this._isMounted) return
+
     const { onScroll } = this.props
 
     const scrollElement = this.props.scrollElement || window

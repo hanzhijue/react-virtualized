@@ -331,6 +331,40 @@ describe('Grid', () => {
       expect(grid.state.scrollTop).toEqual(940)
     })
 
+    // Tests issue #691
+    it('should set the correct :scrollLeft after height increases from 0', () => {
+      render.unmount()
+      expect(
+        findDOMNode(render(getMarkup({
+          height: 0,
+          scrollToColumn: 24
+        }))).scrollLeft || 0
+      ).toEqual(0)
+      expect(
+        findDOMNode(render(getMarkup({
+          height: 100,
+          scrollToColumn: 24
+        }))).scrollLeft
+      ).toEqual(1050)
+    })
+
+    // Tests issue #691
+    it('should set the correct :scrollTop after width increases from 0', () => {
+      render.unmount()
+      expect(
+        findDOMNode(render(getMarkup({
+          scrollToRow: 49,
+          width: 0
+        }))).scrollTop || 0
+      ).toEqual(0)
+      expect(
+        findDOMNode(render(getMarkup({
+          scrollToRow: 49,
+          width: 100
+        }))).scrollTop
+      ).toEqual(900)
+    })
+
     // Tests issue #218
     it('should set the correct :scrollTop after row and column counts increase from 0', () => {
       const expectedScrollTop = 100 * DEFAULT_ROW_HEIGHT - DEFAULT_HEIGHT + DEFAULT_ROW_HEIGHT
@@ -405,6 +439,20 @@ describe('Grid', () => {
       })
       expect(grid.state.scrollLeft).toEqual(25)
       expect(grid.state.scrollTop).toEqual(50)
+    })
+
+    it('should support handleScrollEvent() public method', () => {
+      const grid = render(getMarkup())
+      expect(grid.state.scrollLeft).toEqual(0)
+      expect(grid.state.scrollTop).toEqual(0)
+
+      grid.handleScrollEvent({
+        scrollLeft: 50,
+        scrollTop: 100
+      })
+      expect(grid.state.isScrolling).toEqual(true)
+      expect(grid.state.scrollLeft).toEqual(50)
+      expect(grid.state.scrollTop).toEqual(100)
     })
 
     it('should support getOffsetForCell() public method', () => {
